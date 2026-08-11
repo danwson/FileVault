@@ -1,10 +1,36 @@
 # FileVault
 
+![CI](https://github.com/danwson/FileVault/actions/workflows/ci.yml/badge.svg)
+
 Serviço de upload, armazenamento e compartilhamento seguro de arquivos, com
 links de download temporários e auditoria de acesso.
 
-Projeto pessoal de portfólio, construído em etapas seguindo um plano de
-estudo estruturado (Docker avançado → CI/CD → AWS).
+## Objetivo
+
+Projeto pessoal de portfólio, construído em etapas para praticar — de ponta
+a ponta e num cenário realista — o que normalmente fica espalhado em vários
+tutoriais isolados: containerização de uma aplicação Laravel, integração
+com armazenamento compatível com S3, pipeline de CI/CD e, na etapa final,
+deploy real na AWS.
+
+Ao final, o sistema permite que um usuário se registre, faça upload de
+arquivos, gere links de compartilhamento temporários (com expiração
+configurável) e tenha visibilidade de quem acessou cada arquivo — com toda
+a infraestrutura (aplicação, banco, fila, storage) rodando em containers e
+publicada via pipeline automatizado.
+
+## Funcionalidades (v1)
+
+- Registro, login e logout
+- Upload de arquivo, armazenado via driver S3-compatible (MinIO)
+- Listagem dos arquivos do usuário
+- Download via link gerado sob demanda (presigned URL)
+- Exclusão de arquivo (remove do storage, não só do banco)
+- Geração de link de compartilhamento com expiração configurável
+- Log de eventos de acesso (upload, download, acesso ao link)
+
+Fora do escopo da v1: pastas/organização em árvore, compartilhamento entre
+usuários, permissões granulares.
 
 ## Stack
 
@@ -15,30 +41,26 @@ estudo estruturado (Docker avançado → CI/CD → AWS).
 - **Sanctum** (autenticação) — a partir da etapa 3
 - **Pest** (testes)
 - **Docker / Docker Compose**
+- **GitHub Actions** (CI: testes + build/push de imagem para o GHCR)
 
 > Nota sobre versão: o plano original previa Laravel 11, mas na data em que
 > este projeto foi iniciado o 11.x já estava fora da janela de suporte de
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 2 — healthchecks e otimização de imagem
+## Status atual: Etapa 2 concluída (adiantada: Etapa 6 também)
 
-- [x] Projeto Laravel criado
-- [x] Pest configurado como test runner
+- [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
       `minio` e um job `minio-init` que cria o bucket automaticamente
-- [x] Dockerfile multi-stage para a aplicação (etapa `vendor` +
-      etapa `app` com PHP-FPM 8.3 Alpine)
-- [x] `HEALTHCHECK` em todos os serviços (`app` via `cgi-fcgi` no endpoint
-      `/ping` do PHP-FPM, `mysql` via `mysqladmin ping`, `redis` via
-      `redis-cli ping`, `minio` via `/minio/health/live`, `webserver` via
-      `wget --spider` no `/up`), com `depends_on: condition: service_healthy`
-      para respeitar a ordem real de disponibilidade
-- [x] Imagem da app otimizada: pacotes `-dev`/toolchain de build isolados
-      num grupo virtual do Alpine e removidos ao fim da camada (225MB →
-      207MB, sem headers/compilador sobrando na imagem final)
+- [x] Dockerfile multi-stage (etapa `vendor` + etapa `app` com PHP-FPM 8.3
+      Alpine), imagem otimizada (225MB → 207MB)
+- [x] `HEALTHCHECK` em todos os serviços, com `depends_on: condition:
+      service_healthy` respeitando a ordem real de disponibilidade
+- [x] CI no GitHub Actions: testes + migrations contra MySQL real a cada
+      push/PR, e build/publicação da imagem no GHCR a cada push em `main`
 - [ ] Ainda **sem** funcionalidades de negócio (auth, upload, share links,
-      logs) — isso vem nas próximas etapas
+      logs) — isso vem na próxima etapa
 
 ### Roteiro do projeto
 
@@ -47,27 +69,14 @@ estudo estruturado (Docker avançado → CI/CD → AWS).
 3. Auth (Sanctum) + entidade `File` com upload básico pro MinIO
 4. `ShareLink` com presigned URLs e expiração
 5. `AccessLog` e eventos assíncronos (fila Redis)
-6. CI/CD com GitHub Actions
+6. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
 7. Migração de MinIO para S3 real na AWS
 8. Consolidação, documentação, decisão sobre certificação
-
-Fora do escopo da v1: pastas/organização em árvore, compartilhamento entre
-usuários, permissões granulares.
 
 ## Rodando o ambiente
 
 Pré-requisito: Docker Desktop (ou outro engine compatível com Docker Compose
 v2) instalado e rodando.
-
-> ⚠️ **Não use `http://filevault.test`.** Como este projeto vive dentro de
-> `~/Herd` (pasta "parked" do Laravel Herd, compartilhada com outros
-> projetos), o Herd serve automaticamente esse domínio usando seu próprio
-> PHP local — completamente fora da rede do Docker Compose. Como o `.env`
-> aponta `DB_HOST=mysql`/`REDIS_HOST=redis`/`AWS_ENDPOINT=http://minio:9000`
-> (hostnames que só existem dentro da rede Docker), qualquer rota que toque
-> sessão/banco trava em timeout nesse domínio. O único endereço válido para
-> este projeto é `http://localhost:8000`, servido pelo `webserver` do
-> `docker-compose.yml`.
 
 ```bash
 cp .env.example .env
@@ -76,13 +85,13 @@ docker compose exec app php artisan key:generate
 docker compose exec app php artisan migrate
 ```
 
-| Serviço          | URL local                          |
-| ---------------- | ----------------------------------- |
-| Aplicação (Nginx)| http://localhost:8000               |
-| MySQL            | localhost:3306                      |
-| Redis            | localhost:6380 (6379 já é comum estar ocupada por um Redis local, ex. DBngin) |
-| MinIO API        | http://localhost:9000               |
-| MinIO Console     | http://localhost:9001               |
+| Serviço           | URL local              |
+| ----------------- | ----------------------- |
+| Aplicação (Nginx) | http://localhost:8000   |
+| MySQL             | localhost:3306           |
+| Redis             | localhost:6380 (porta alternativa para evitar conflito com um Redis local já em uso) |
+| MinIO API         | http://localhost:9000   |
+| MinIO Console     | http://localhost:9001   |
 
 Acompanhar o status dos healthchecks:
 
@@ -103,3 +112,11 @@ docker compose exec app ./vendor/bin/pest
 Localmente (sem Docker), os testes usam SQLite em memória
 (`phpunit.xml`), então também é possível rodar `./vendor/bin/pest`
 diretamente com PHP/Composer instalados na máquina.
+
+## CI/CD
+
+A cada push/PR para `main`, o [workflow de CI](.github/workflows/ci.yml)
+sobe um MySQL 8.4 efêmero, aplica as migrations nele, roda a suite Pest e
+valida o estilo do código (Pint). A cada push em `main`, um segundo job
+builda a imagem da aplicação e publica em
+[`ghcr.io/danwson/filevault`](https://github.com/danwson/filevault/pkgs/container/filevault).

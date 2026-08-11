@@ -35,6 +35,7 @@ RUN apk add --no-cache \
         freetype-dev \
         icu-dev \
         oniguruma-dev \
+        sqlite-dev \
         $PHPIZE_DEPS \
         linux-headers \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \

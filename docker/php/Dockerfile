@@ -71,6 +71,15 @@ RUN { \
         echo 'ping.path = /ping'; \
     } >> /usr/local/etc/php-fpm.d/www.conf
 
+# Padrão do PHP é 2M para upload — bem abaixo do limite de 10MB que a
+# aplicação valida (StoreFileRequest). Sem isso, uploads entre 2MB e
+# 10MB seriam truncados/rejeitados pelo próprio PHP antes de chegar na
+# validação do Laravel.
+RUN { \
+        echo 'upload_max_filesize = 12M'; \
+        echo 'post_max_size = 12M'; \
+    } > /usr/local/etc/php/conf.d/uploads.ini
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

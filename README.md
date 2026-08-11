@@ -48,7 +48,7 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 3 concluída (adiantada: Etapa 6 também)
+## Status atual: Etapa 4 concluída (adiantada: Etapa 7 também)
 
 - [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
@@ -60,22 +60,26 @@ usuários, permissões granulares.
 - [x] CI no GitHub Actions: testes + migrations contra MySQL real a cada
       push/PR, e build/publicação da imagem no GHCR a cada push em `main`
 - [x] Autenticação via Sanctum: registro, login, logout (revoga só o
-      token da própria requisição) e `/api/me`, com suite de testes
-      (`tests/Feature/AuthTest.php`) cobrindo os 8 cenários de sucesso e
-      falha
-- [ ] Ainda **sem** upload/compartilhamento de arquivos — isso vem na
+      token da própria requisição), `/api/me` e rate limiting no login
+      (`tests/Feature/AuthTest.php`)
+- [x] Upload de arquivo (`app/Models/File.php`) pro MinIO via disco `s3`:
+      criar, listar (paginado, escopado ao dono), ver detalhe e apagar
+      (do storage **e** do banco). Autorização via `FilePolicy` — usuário
+      nunca acessa/apaga arquivo de outro (`tests/Feature/FileTest.php`)
+- [ ] Ainda **sem** links de compartilhamento com expiração — isso vem na
       próxima etapa
 
 ### Roteiro do projeto
 
 1. ~~Setup Laravel + Docker Compose (app, MySQL, Redis, MinIO)~~ ✅
 2. ~~Multi-stage build, healthchecks, otimização de imagem~~ ✅
-3. ~~Auth (Sanctum)~~ ✅ — falta a entidade `File` com upload básico pro MinIO
-4. `ShareLink` com presigned URLs e expiração
-5. `AccessLog` e eventos assíncronos (fila Redis)
-6. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
-7. Migração de MinIO para S3 real na AWS
-8. Consolidação, documentação, decisão sobre certificação
+3. ~~Auth (Sanctum)~~ ✅
+4. ~~Upload de arquivo (entidade `File`) pro MinIO~~ ✅
+5. `ShareLink` com presigned URLs e expiração
+6. `AccessLog` e eventos assíncronos (fila Redis)
+7. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
+8. Migração de MinIO para S3 real na AWS
+9. Consolidação, documentação, decisão sobre certificação
 
 ## Rodando o ambiente
 

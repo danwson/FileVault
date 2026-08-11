@@ -135,3 +135,23 @@ test('logout revoga o token (tentativa de uso posterior falha)', function () {
         ->getJson('/api/me');
     $reuse->assertStatus(401);
 });
+
+test('login é bloqueado por rate limit após muitas tentativas', function () {
+    User::factory()->create([
+        'email' => 'daniel@example.com',
+        'password' => bcrypt('senha-correta'),
+    ]);
+
+    $attempt = fn () => $this->postJson('/api/login', [
+        'email' => 'daniel@example.com',
+        'password' => 'senha-errada',
+    ]);
+
+    // O limiter ("login" em AppServiceProvider) permite 5 tentativas/min
+    // por combinação email+IP.
+    for ($i = 0; $i < 5; $i++) {
+        $attempt()->assertStatus(401);
+    }
+
+    $attempt()->assertStatus(429);
+});

@@ -23,12 +23,24 @@ RUN composer install \
 #
 # ---- Etapa 2: app -----------------------------------------------------------
 # Imagem final de runtime: PHP-FPM enxuto com apenas o que é necessário
-# para servir a aplicação. Otimizações adicionais (usuário não-root,
-# healthcheck, tuning de opcache/php.ini) entram na próxima etapa do projeto.
+# para servir a aplicação.
 # ------------------------------------------------------------------------
 FROM php:8.3-fpm-alpine AS app
 
+# Bibliotecas de runtime: ficam na imagem final (os pacotes "-dev"
+# correspondentes, usados só para compilar as extensões abaixo, são
+# instalados como grupo virtual e removidos ao fim desta mesma camada —
+# não sobram headers/compiladores na imagem publicada).
 RUN apk add --no-cache \
+        libzip \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        icu-libs \
+        oniguruma \
+        sqlite-libs \
+        fcgi \
+    && apk add --no-cache --virtual .build-deps \
         libzip-dev \
         libpng-dev \
         libjpeg-turbo-dev \
@@ -50,7 +62,14 @@ RUN apk add --no-cache \
         pcntl \
     && pecl install redis \
     && docker-php-ext-enable redis \
-    && apk del $PHPIZE_DEPS linux-headers
+    && apk del .build-deps
+
+# Habilita o endpoint de "ping" do PHP-FPM, usado pelo HEALTHCHECK abaixo
+# (fala o protocolo FastCGI via cgi-fcgi, já que o FPM não expõe HTTP).
+RUN { \
+        echo 'pm.status_path = /status'; \
+        echo 'ping.path = /ping'; \
+    } >> /usr/local/etc/php-fpm.d/www.conf
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -65,5 +84,9 @@ RUN composer dump-autoload --optimize --no-dev \
 USER www-data
 
 EXPOSE 9000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping REQUEST_METHOD=GET \
+        cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
 
 CMD ["php-fpm"]

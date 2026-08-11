@@ -21,7 +21,7 @@ estudo estruturado (Docker avançado → CI/CD → AWS).
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 1 — estrutura inicial
+## Status atual: Etapa 2 — healthchecks e otimização de imagem
 
 - [x] Projeto Laravel criado
 - [x] Pest configurado como test runner
@@ -29,13 +29,21 @@ estudo estruturado (Docker avançado → CI/CD → AWS).
       `minio` e um job `minio-init` que cria o bucket automaticamente
 - [x] Dockerfile multi-stage para a aplicação (etapa `vendor` +
       etapa `app` com PHP-FPM 8.3 Alpine)
+- [x] `HEALTHCHECK` em todos os serviços (`app` via `cgi-fcgi` no endpoint
+      `/ping` do PHP-FPM, `mysql` via `mysqladmin ping`, `redis` via
+      `redis-cli ping`, `minio` via `/minio/health/live`, `webserver` via
+      `wget --spider` no `/up`), com `depends_on: condition: service_healthy`
+      para respeitar a ordem real de disponibilidade
+- [x] Imagem da app otimizada: pacotes `-dev`/toolchain de build isolados
+      num grupo virtual do Alpine e removidos ao fim da camada (225MB →
+      207MB, sem headers/compilador sobrando na imagem final)
 - [ ] Ainda **sem** funcionalidades de negócio (auth, upload, share links,
       logs) — isso vem nas próximas etapas
 
 ### Roteiro do projeto
 
 1. ~~Setup Laravel + Docker Compose (app, MySQL, Redis, MinIO)~~ ✅
-2. Multi-stage build, healthchecks, otimização de imagem
+2. ~~Multi-stage build, healthchecks, otimização de imagem~~ ✅
 3. Auth (Sanctum) + entidade `File` com upload básico pro MinIO
 4. `ShareLink` com presigned URLs e expiração
 5. `AccessLog` e eventos assíncronos (fila Redis)
@@ -62,9 +70,15 @@ docker compose exec app php artisan migrate
 | ---------------- | ----------------------------------- |
 | Aplicação (Nginx)| http://localhost:8000               |
 | MySQL            | localhost:3306                      |
-| Redis            | localhost:6379                      |
+| Redis            | localhost:6380 (6379 já é comum estar ocupada por um Redis local, ex. DBngin) |
 | MinIO API        | http://localhost:9000               |
 | MinIO Console     | http://localhost:9001               |
+
+Acompanhar o status dos healthchecks:
+
+```bash
+docker compose ps
+```
 
 As credenciais do MySQL, Redis e MinIO ficam no `.env` (veja
 `.env.example`). O bucket configurado em `MINIO_BUCKET` é criado

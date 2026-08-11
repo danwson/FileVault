@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# GITHUB_TOKEN só com permissão de leitura por padrão (esse workflow não
+# precisa escrever nada no repositório).
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MYSQL_DATABASE: filevault_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_mysql, bcmath, intl, gd, zip, redis
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Generate key
+        run: php artisan key:generate
+
+      - name: Check code style (Pint)
+        run: vendor/bin/pint --test
+
+      # DB_HOST=127.0.0.1 (não "mysql"): esse job roda direto na VM do
+      # runner, não dentro de um container — o serviço "mysql" é exposto
+      # via port-forward em localhost, o hostname "mysql" só existe na rede
+      # do nosso docker-compose.yml local. DB_USERNAME=root porque o
+      # serviço abaixo só define MYSQL_ROOT_PASSWORD, sem criar um usuário
+      # de app à parte.
+      - name: Run migrations against MySQL
+        run: php artisan migrate --force
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: filevault_test
+          DB_USERNAME: root
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
+      # A suite roda contra SQLite em memória (configurado no phpunit.xml
+      # para APP_ENV=testing), não contra o serviço MySQL acima — por isso
+      # não precisa repetir as variáveis de DB aqui. O passo anterior já
+      # validou que as migrations são compatíveis com MySQL de verdade.
+      - name: Run tests
+        run: php artisan test

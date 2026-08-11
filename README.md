@@ -38,7 +38,7 @@ usuários, permissões granulares.
 - **MySQL** 8.4
 - **MinIO** (compatível com S3, roda localmente sem custo/conta AWS)
 - **Redis** (fila / eventos assíncronos)
-- **Sanctum** (autenticação) — a partir da etapa 3
+- **Sanctum** (autenticação)
 - **Pest** (testes)
 - **Docker / Docker Compose**
 - **GitHub Actions** (CI: testes + build/push de imagem para o GHCR)
@@ -48,7 +48,7 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 2 concluída (adiantada: Etapa 6 também)
+## Status atual: Etapa 3 concluída (adiantada: Etapa 6 também)
 
 - [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
@@ -59,14 +59,18 @@ usuários, permissões granulares.
       service_healthy` respeitando a ordem real de disponibilidade
 - [x] CI no GitHub Actions: testes + migrations contra MySQL real a cada
       push/PR, e build/publicação da imagem no GHCR a cada push em `main`
-- [ ] Ainda **sem** funcionalidades de negócio (auth, upload, share links,
-      logs) — isso vem na próxima etapa
+- [x] Autenticação via Sanctum: registro, login, logout (revoga só o
+      token da própria requisição) e `/api/me`, com suite de testes
+      (`tests/Feature/AuthTest.php`) cobrindo os 8 cenários de sucesso e
+      falha
+- [ ] Ainda **sem** upload/compartilhamento de arquivos — isso vem na
+      próxima etapa
 
 ### Roteiro do projeto
 
 1. ~~Setup Laravel + Docker Compose (app, MySQL, Redis, MinIO)~~ ✅
 2. ~~Multi-stage build, healthchecks, otimização de imagem~~ ✅
-3. Auth (Sanctum) + entidade `File` com upload básico pro MinIO
+3. ~~Auth (Sanctum)~~ ✅ — falta a entidade `File` com upload básico pro MinIO
 4. `ShareLink` com presigned URLs e expiração
 5. `AccessLog` e eventos assíncronos (fila Redis)
 6. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)

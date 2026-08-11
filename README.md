@@ -59,6 +59,16 @@ usuários, permissões granulares.
 Pré-requisito: Docker Desktop (ou outro engine compatível com Docker Compose
 v2) instalado e rodando.
 
+> ⚠️ **Não use `http://filevault.test`.** Como este projeto vive dentro de
+> `~/Herd` (pasta "parked" do Laravel Herd, compartilhada com outros
+> projetos), o Herd serve automaticamente esse domínio usando seu próprio
+> PHP local — completamente fora da rede do Docker Compose. Como o `.env`
+> aponta `DB_HOST=mysql`/`REDIS_HOST=redis`/`AWS_ENDPOINT=http://minio:9000`
+> (hostnames que só existem dentro da rede Docker), qualquer rota que toque
+> sessão/banco trava em timeout nesse domínio. O único endereço válido para
+> este projeto é `http://localhost:8000`, servido pelo `webserver` do
+> `docker-compose.yml`.
+
 ```bash
 cp .env.example .env
 docker compose up -d --build

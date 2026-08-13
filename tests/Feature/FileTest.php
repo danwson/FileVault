@@ -13,23 +13,6 @@ beforeEach(function () {
     Storage::fake('s3');
 });
 
-// Inclui sempre "Accept: application/json": sem isso, o Laravel trata a
-// requisição como um form web tradicional e responde falhas de auth/
-// validação com redirect (302) em vez de JSON — mascarando os status
-// codes que essa suite está verificando.
-function authHeader(User $user): array
-{
-    return [
-        'Accept' => 'application/json',
-        'Authorization' => 'Bearer '.$user->createToken('api')->plainTextToken,
-    ];
-}
-
-function jsonHeader(): array
-{
-    return ['Accept' => 'application/json'];
-}
-
 test('usuário autenticado consegue fazer upload de um arquivo', function () {
     $user = User::factory()->create();
     $upload = UploadedFile::fake()->create('relatorio.pdf', 500, 'application/pdf');

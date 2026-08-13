@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +45,19 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+// Inclui sempre "Accept: application/json": sem isso, o Laravel trata a
+// requisição como um form web tradicional e responde falhas de auth/
+// validação com redirect (302) em vez de JSON — mascarando os status
+// codes que a suite verifica.
+function authHeader(User $user): array
 {
-    // ..
+    return [
+        'Accept' => 'application/json',
+        'Authorization' => 'Bearer '.$user->createToken('api')->plainTextToken,
+    ];
+}
+
+function jsonHeader(): array
+{
+    return ['Accept' => 'application/json'];
 }

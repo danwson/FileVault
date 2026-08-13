@@ -48,7 +48,7 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 4 concluída (adiantada: Etapa 7 também)
+## Status atual: Etapa 5 concluída (adiantada: Etapa 7 também)
 
 - [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
@@ -66,8 +66,20 @@ usuários, permissões granulares.
       criar, listar (paginado, escopado ao dono), ver detalhe e apagar
       (do storage **e** do banco). Autorização via `FilePolicy` — usuário
       nunca acessa/apaga arquivo de outro (`tests/Feature/FileTest.php`)
-- [ ] Ainda **sem** links de compartilhamento com expiração — isso vem na
+- [x] `ShareLink` com presigned URL e expiração configurável: endpoint
+      público (sem autenticação) que distingue **404** (token nunca
+      existiu) de **410** (token existiu, mas expirou ou esgotou
+      `max_uses`); incremento de `access_count` é atômico — testado
+      contra corrida entre requisições simultâneas
+      (`tests/Feature/ShareLinkTest.php`)
+- [ ] Ainda **sem** log de acesso nem eventos assíncronos — isso vem na
       próxima etapa
+
+> Também já validado manualmente contra a **AWS S3 real** (não só o MinIO
+> local): upload, download via presigned URL, delete sem órfão no bucket,
+> e os cenários de 404/410/`access_count` do `ShareLink`, tudo de ponta a
+> ponta. A migração formal (Etapa 8) ainda cobre documentação/IaC, mas a
+> integração em si já está validada funcionando.
 
 ### Roteiro do projeto
 
@@ -75,7 +87,7 @@ usuários, permissões granulares.
 2. ~~Multi-stage build, healthchecks, otimização de imagem~~ ✅
 3. ~~Auth (Sanctum)~~ ✅
 4. ~~Upload de arquivo (entidade `File`) pro MinIO~~ ✅
-5. `ShareLink` com presigned URLs e expiração
+5. ~~`ShareLink` com presigned URLs e expiração~~ ✅
 6. `AccessLog` e eventos assíncronos (fila Redis)
 7. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
 8. Migração de MinIO para S3 real na AWS

@@ -10,8 +10,10 @@ links de download temporários e auditoria de acesso.
 Projeto pessoal de portfólio, construído em etapas para praticar — de ponta
 a ponta e num cenário realista — o que normalmente fica espalhado em vários
 tutoriais isolados: containerização de uma aplicação Laravel, integração
-com armazenamento compatível com S3, pipeline de CI/CD e, na etapa final,
-deploy real na AWS.
+com armazenamento compatível com S3, pipeline de CI/CD e validação real
+contra a AWS. O objetivo é validar a teoria e construir material de
+portfólio — não manter um deploy real/produtivo rodando na AWS (ver
+[MinIO vs. S3 real](#minio-vs-s3-real)).
 
 Ao final, o sistema permite que um usuário se registre, faça upload de
 arquivos, gere links de compartilhamento temporários (com expiração
@@ -48,7 +50,7 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 6 concluída (adiantada: Etapa 7 também)
+## Status atual: Etapa 8 concluída (adiantada: Etapa 7 também)
 
 - [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
@@ -78,14 +80,13 @@ usuários, permissões granulares.
       `queue-worker` dedicado). `GET /api/files/{id}/logs` (dono,
       `FilePolicy`), paginado, mais recente primeiro
       (`tests/Feature/AccessLogTest.php`)
-- [ ] Etapa 8 (migração formal pra S3) e Etapa 9 (consolidação/
-      documentação final) ainda pendentes
-
-> Também já validado manualmente contra a **AWS S3 real** (não só o MinIO
-> local): upload, download via presigned URL, delete sem órfão no bucket,
-> e os cenários de 404/410/`access_count` do `ShareLink`, tudo de ponta a
-> ponta. A migração formal (Etapa 8) ainda cobre documentação/IaC, mas a
-> integração em si já está validada funcionando.
+- [x] Validação contra **S3 real na AWS**: upload, download via presigned
+      URL, delete sem órfão no bucket, `ShareLink` (404/410/
+      `access_count`) e `AccessLog` assíncrono, tudo testado de ponta a
+      ponta contra a infraestrutura real — ver
+      [MinIO vs. S3 real](#minio-vs-s3-real). Decisão explícita: sem
+      deploy real/produtivo mantido rodando (é validação, não hosting)
+- [ ] Etapa 9 (consolidação/documentação final) ainda pendente
 
 ### Roteiro do projeto
 
@@ -96,7 +97,7 @@ usuários, permissões granulares.
 5. ~~`ShareLink` com presigned URLs e expiração~~ ✅
 6. ~~`AccessLog` e eventos assíncronos (fila Redis)~~ ✅
 7. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
-8. Migração de MinIO para S3 real na AWS
+8. ~~Migração de MinIO para S3 real na AWS~~ ✅ (validação, sem deploy mantido)
 9. Consolidação, documentação, decisão sobre certificação
 
 ## Rodando o ambiente
@@ -151,3 +152,59 @@ sobe um MySQL 8.4 efêmero, aplica as migrations nele, roda a suite Pest e
 valida o estilo do código (Pint). A cada push em `main`, um segundo job
 builda a imagem da aplicação e publica em
 [`ghcr.io/danwson/filevault`](https://github.com/danwson/filevault/pkgs/container/filevault).
+
+## MinIO vs. S3 real
+
+O disco `s3` da aplicação (`config/filesystems.php`, usado explicitamente
+via `Storage::disk('s3')` em `FileController`/`ShareLinkController`) fala
+o mesmo protocolo S3 independentemente de apontar pro MinIO local ou pro
+S3 real da AWS — a troca é só de variáveis de ambiente, nenhuma linha de
+código muda.
+
+**Decisão de arquitetura:**
+
+- **MinIO** (`docker-compose.yml`) é o storage de **desenvolvimento e
+  CI** — zero custo, zero conta AWS necessária, é o que roda por padrão
+  ao clonar o repositório e o que os testes automatizados usam (via
+  `Storage::fake('s3')`, nem chega a bater no MinIO de verdade)
+- **S3 real** foi usado só pra **validar a integração de ponta a ponta**
+  contra a AWS de verdade (upload, download via presigned URL, delete
+  sem órfão no bucket, `ShareLink` e `AccessLog` assíncrono) — não fica
+  rodando continuamente. O objetivo deste projeto é validar a teoria e
+  gerar material de portfólio, não manter uma instância produtiva no ar
+- O **CI não testa contra AWS real** de propósito — evitar guardar
+  credenciais reais da AWS no GitHub Actions só pra isso, e evitar
+  custo/flakiness em runs automáticos. A suíte de testes já cobre a
+  lógica da aplicação com o disco fake; a integração real foi validada
+  manualmente
+- Bucket e usuário IAM foram criados manualmente pelo console da AWS
+  (sem Terraform/CDK) — infraestrutura como código seria o próximo passo
+  natural se isso virasse um deploy real, mas está fora do escopo aqui
+
+**Para rodar contra S3 real:** ver o bloco comentado em
+[`.env.example`](.env.example) (procure por "Rodando contra S3 real").
+Nunca commitar as credenciais reais — elas ficam só no `.env` local
+(`.gitignore`).
+
+**Permissão IAM mínima** usada (escopada só ao bucket, não à conta
+inteira):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "FileVaultBucketObjectAccess",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::<nome-do-bucket>/*"
+    },
+    {
+      "Sid": "FileVaultBucketListAccess",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::<nome-do-bucket>"
+    }
+  ]
+}
+```

@@ -5,6 +5,15 @@
 Serviço de upload, armazenamento e compartilhamento seguro de arquivos, com
 links de download temporários e auditoria de acesso.
 
+## Destaques técnicos
+
+- **Arquitetura assíncrona real**: eventos → listeners → jobs processados por um worker dedicado via fila Redis, não processamento simulado
+- **Presigned URLs geradas sob demanda**: nunca persistidas, validadas empiricamente contra a AWS real (assinatura e timestamp distintos a cada acesso)
+- **Concorrência tratada corretamente**: contagem de acessos via UPDATE atômico, testada contra corrida real entre requisições simultâneas
+- **CI/CD completo**: testes, lint e build/push de imagem versionada (GHCR) a cada push
+- **Storage trocável por variável de ambiente**: mesmo código roda contra MinIO (dev) ou S3 real (validação), sem alterar uma linha
+- **Segurança por design**: IAM com política de menor privilégio, bucket sem acesso público, rate limiting, autorização por policy em cada recurso
+
 ## Objetivo
 
 Projeto pessoal de portfólio, construído em etapas para praticar — de ponta
@@ -20,19 +29,6 @@ arquivos, gere links de compartilhamento temporários (com expiração
 configurável) e tenha visibilidade de quem acessou cada arquivo — com toda
 a infraestrutura (aplicação, banco, fila, storage) rodando em containers e
 publicada via pipeline automatizado.
-
-## Funcionalidades (v1)
-
-- Registro, login e logout
-- Upload de arquivo, armazenado via driver S3-compatible (MinIO)
-- Listagem dos arquivos do usuário
-- Download via link gerado sob demanda (presigned URL)
-- Exclusão de arquivo (remove do storage, não só do banco)
-- Geração de link de compartilhamento com expiração configurável
-- Log de eventos de acesso (upload, download, acesso ao link)
-
-Fora do escopo da v1: pastas/organização em árvore, compartilhamento entre
-usuários, permissões granulares.
 
 ## Stack
 
@@ -50,43 +46,17 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 8 concluída (adiantada: Etapa 7 também)
+## Funcionalidades implementadas
 
-- [x] Projeto Laravel criado, Pest como test runner
-- [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
-      `minio` e um job `minio-init` que cria o bucket automaticamente
-- [x] Dockerfile multi-stage (etapa `vendor` + etapa `app` com PHP-FPM 8.3
-      Alpine), imagem otimizada (225MB → 207MB)
-- [x] `HEALTHCHECK` em todos os serviços, com `depends_on: condition:
-      service_healthy` respeitando a ordem real de disponibilidade
-- [x] CI no GitHub Actions: testes + migrations contra MySQL real a cada
-      push/PR, e build/publicação da imagem no GHCR a cada push em `main`
-- [x] Autenticação via Sanctum: registro, login, logout (revoga só o
-      token da própria requisição), `/api/me` e rate limiting no login
-      (`tests/Feature/AuthTest.php`)
-- [x] Upload de arquivo (`app/Models/File.php`) pro MinIO via disco `s3`:
-      criar, listar (paginado, escopado ao dono), ver detalhe e apagar
-      (do storage **e** do banco). Autorização via `FilePolicy` — usuário
-      nunca acessa/apaga arquivo de outro (`tests/Feature/FileTest.php`)
-- [x] `ShareLink` com presigned URL e expiração configurável: endpoint
-      público (sem autenticação) que distingue **404** (token nunca
-      existiu) de **410** (token existiu, mas expirou ou esgotou
-      `max_uses`); incremento de `access_count` é atômico — testado
-      contra corrida entre requisições simultâneas
-      (`tests/Feature/ShareLinkTest.php`)
-- [x] `AccessLog` assíncrono via Redis: eventos `FileUploaded`,
-      `FileDownloaded`, `ShareLinkAccessed` → `LogAccessListener` →
-      `LogAccessJob` (fila `redis`, processada por um container
-      `queue-worker` dedicado). `GET /api/files/{id}/logs` (dono,
-      `FilePolicy`), paginado, mais recente primeiro
-      (`tests/Feature/AccessLogTest.php`)
-- [x] Validação contra **S3 real na AWS**: upload, download via presigned
-      URL, delete sem órfão no bucket, `ShareLink` (404/410/
-      `access_count`) e `AccessLog` assíncrono, tudo testado de ponta a
-      ponta contra a infraestrutura real — ver
-      [MinIO vs. S3 real](#minio-vs-s3-real). Decisão explícita: sem
-      deploy real/produtivo mantido rodando (é validação, não hosting)
-- [ ] Etapa 9 (consolidação/documentação final) ainda pendente
+- Registro, login, logout e perfil autenticado (Sanctum), com rate limiting no login
+- Upload, listagem paginada, detalhe e exclusão de arquivos — autorização por dono via `FilePolicy`, sem órfãos no storage
+- Links de compartilhamento com expiração e limite de usos configuráveis, distinguindo `404` (token inexistente) de `410` (expirado/esgotado)
+- Auditoria assíncrona de acessos (upload, download, acesso a link), com endpoint de consulta paginado
+- Pipeline de CI/CD: testes automatizados, lint (Pint), build e publicação de imagem versionada no GHCR
+- Validado de ponta a ponta contra AWS S3 real (upload, download, delete, compartilhamento e auditoria)
+
+Fora do escopo da v1: pastas/organização em árvore, compartilhamento entre
+usuários, permissões granulares.
 
 ### Roteiro do projeto
 
@@ -98,7 +68,6 @@ usuários, permissões granulares.
 6. ~~`AccessLog` e eventos assíncronos (fila Redis)~~ ✅
 7. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
 8. ~~Migração de MinIO para S3 real na AWS~~ ✅ (validação, sem deploy mantido)
-9. Consolidação, documentação, decisão sobre certificação
 
 ## Rodando o ambiente
 

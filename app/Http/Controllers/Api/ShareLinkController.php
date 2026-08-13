@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\ShareLinkAccessed;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreShareLinkRequest;
 use App\Models\File;
 use App\Models\ShareLink;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -49,7 +51,7 @@ class ShareLinkController extends Controller
      *   (expirou ou atingiu o limite de usos) — o recurso "foi embora",
      *   diferente de "nunca esteve lá"
      */
-    public function show(string $token): JsonResponse|RedirectResponse
+    public function show(Request $request, string $token): JsonResponse|RedirectResponse
     {
         $shareLink = ShareLink::where('token', $token)->first();
 
@@ -81,6 +83,8 @@ class ShareLinkController extends Controller
             $shareLink->file->storage_path,
             now()->addMinutes(5)
         );
+
+        event(new ShareLinkAccessed($shareLink, $request->ip(), $request->userAgent()));
 
         return redirect()->away($url);
     }

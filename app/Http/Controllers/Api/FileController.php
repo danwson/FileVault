@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\FileDownloaded;
+use App\Events\FileUploaded;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreFileRequest;
+use App\Http\Resources\AccessLogResource;
 use App\Models\File;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -52,6 +56,8 @@ class FileController extends Controller
             'storage_path' => $storagePath,
         ]);
 
+        event(new FileUploaded($file, $request->ip(), $request->userAgent()));
+
         return response()->json($file, 201);
     }
 
@@ -60,6 +66,37 @@ class FileController extends Controller
         $this->authorize('view', $file);
 
         return response()->json($file);
+    }
+
+    /**
+     * Download direto e autenticado pro dono do arquivo (diferente do
+     * ShareLink, que é público). Mesma mecânica de presigned URL de
+     * curta duração usada no ShareLinkController.
+     */
+    public function download(Request $request, File $file): RedirectResponse
+    {
+        $this->authorize('view', $file);
+
+        $url = Storage::disk('s3')->temporaryUrl($file->storage_path, now()->addMinutes(5));
+
+        event(new FileDownloaded($file, $request->ip(), $request->userAgent()));
+
+        return redirect()->away($url);
+    }
+
+    /**
+     * Histórico de acesso do arquivo — só o dono (mesma FilePolicy usada
+     * em show/destroy/download). Mais recente primeiro, paginado.
+     */
+    public function logs(Request $request, File $file): JsonResponse
+    {
+        $this->authorize('view', $file);
+
+        $logs = $file->accessLogs()->latest()->paginate(15);
+
+        return response()->json(
+            AccessLogResource::collection($logs)->response()->getData(true)
+        );
     }
 
     /**

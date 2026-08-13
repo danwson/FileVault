@@ -19,6 +19,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/files', [FileController::class, 'store']);
     Route::get('/files', [FileController::class, 'index']);
     Route::get('/files/{file}', [FileController::class, 'show']);
+    Route::get('/files/{file}/download', [FileController::class, 'download']);
+    Route::get('/files/{file}/logs', [FileController::class, 'logs']);
     Route::delete('/files/{file}', [FileController::class, 'destroy']);
 
     Route::post('/files/{file}/share-links', [ShareLinkController::class, 'store']);

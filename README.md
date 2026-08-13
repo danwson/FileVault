@@ -48,7 +48,7 @@ usuários, permissões granulares.
 > segurança (CVE-2026-48019, sem correção retroativa). Optou-se por ir
 > direto para o Laravel 13 (LTS mais recente), mantendo PHP 8.3.
 
-## Status atual: Etapa 5 concluída (adiantada: Etapa 7 também)
+## Status atual: Etapa 6 concluída (adiantada: Etapa 7 também)
 
 - [x] Projeto Laravel criado, Pest como test runner
 - [x] `docker-compose.yml` com `app`, `webserver` (Nginx), `mysql`, `redis`,
@@ -72,8 +72,14 @@ usuários, permissões granulares.
       `max_uses`); incremento de `access_count` é atômico — testado
       contra corrida entre requisições simultâneas
       (`tests/Feature/ShareLinkTest.php`)
-- [ ] Ainda **sem** log de acesso nem eventos assíncronos — isso vem na
-      próxima etapa
+- [x] `AccessLog` assíncrono via Redis: eventos `FileUploaded`,
+      `FileDownloaded`, `ShareLinkAccessed` → `LogAccessListener` →
+      `LogAccessJob` (fila `redis`, processada por um container
+      `queue-worker` dedicado). `GET /api/files/{id}/logs` (dono,
+      `FilePolicy`), paginado, mais recente primeiro
+      (`tests/Feature/AccessLogTest.php`)
+- [ ] Etapa 8 (migração formal pra S3) e Etapa 9 (consolidação/
+      documentação final) ainda pendentes
 
 > Também já validado manualmente contra a **AWS S3 real** (não só o MinIO
 > local): upload, download via presigned URL, delete sem órfão no bucket,
@@ -88,7 +94,7 @@ usuários, permissões granulares.
 3. ~~Auth (Sanctum)~~ ✅
 4. ~~Upload de arquivo (entidade `File`) pro MinIO~~ ✅
 5. ~~`ShareLink` com presigned URLs e expiração~~ ✅
-6. `AccessLog` e eventos assíncronos (fila Redis)
+6. ~~`AccessLog` e eventos assíncronos (fila Redis)~~ ✅
 7. ~~CI/CD com GitHub Actions~~ ✅ (adiantado)
 8. Migração de MinIO para S3 real na AWS
 9. Consolidação, documentação, decisão sobre certificação
@@ -112,6 +118,11 @@ docker compose exec app php artisan migrate
 | Redis             | localhost:6380 (porta alternativa para evitar conflito com um Redis local já em uso) |
 | MinIO API         | http://localhost:9000   |
 | MinIO Console     | http://localhost:9001   |
+
+O serviço `queue-worker` (mesma imagem do `app`, rodando `queue:work` em
+vez de `php-fpm`) processa os jobs assíncronos de `AccessLog` — sem ele,
+os eventos de upload/download/acesso a link ficam parados na fila do
+Redis e nunca viram registro no banco.
 
 Acompanhar o status dos healthchecks:
 

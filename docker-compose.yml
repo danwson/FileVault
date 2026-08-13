@@ -8,6 +8,7 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    image: filevault-app:latest
     container_name: filevault_app
     restart: unless-stopped
     working_dir: /var/www/html
@@ -20,6 +21,37 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - filevault
+
+  # Mesma imagem do "app", mas rodando "queue:work" em vez de php-fpm —
+  # processa os jobs despachados por LogAccessListener (fila "redis").
+  # Sem esse serviço, os jobs ficam parados na fila pra sempre: nada os
+  # consome.
+  queue-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    image: filevault-app:latest
+    container_name: filevault_queue_worker
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work redis --sleep=1 --tries=3
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # A imagem tem um HEALTHCHECK embutido (Dockerfile) que checa o
+    # PHP-FPM na porta 9000 via cgi-fcgi — não se aplica aqui, esse
+    # container roda "queue:work", não "php-fpm", então a porta 9000
+    # nunca escuta e o check ficaria eternamente "unhealthy".
+    healthcheck:
+      disable: true
     networks:
       - filevault
 

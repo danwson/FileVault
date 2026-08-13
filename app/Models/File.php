@@ -35,4 +35,9 @@ class File extends Model
     {
         return $this->hasMany(ShareLink::class);
     }
+
+    public function accessLogs(): HasMany
+    {
+        return $this->hasMany(AccessLog::class);
+    }
 }
